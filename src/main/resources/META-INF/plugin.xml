@@ -1,0 +1,26 @@
+<idea-plugin>
+    <id>eu.fbk.st.FirebaseDbBChecker</id>
+    <name>Firebase Database Access Checker</name>
+    <vendor email="demissie@fbk.eu" url="http://st.fbk.eu">FBK.eu</vendor>
+
+    <description><![CDATA[
+    This plugin helps you check if your Firebase database is publicly readable/writable.</em>
+    ]]></description>
+
+    <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
+         on how to target different products -->
+    <!-- uncomment to enable plugin in all products
+    <depends>com.intellij.modules.lang</depends>
+    -->
+    <idea-version since-build="174.0"/>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Add your extensions here -->
+    </extensions>
+
+    <actions>
+        <action id="eu.fbk.st.FirebaseDbBChecker.check" class="eu.fbk.st.FirebaseDbBChecker" text="_Check Firebase Access" description="Start checking my Firebase database.">
+            <add-to-group group-id="ToolsMenu" anchor="first"  />
+        </action>
+    </actions>
+</idea-plugin>
