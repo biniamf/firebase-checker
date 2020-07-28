@@ -12,14 +12,19 @@ import java.util.regex.Pattern;
 
 public class MethodCallExpressionVisitor extends JavaRecursiveElementVisitor {
 
-    Set<String> urlReferences;
-    Set<String> pathReferences;
-    Set<String> dbReferences;
+    private Set<String> urlReferences;
+    private Set<String> pathReferences;
+    private Set<String> dbReferences;
+    private Set<String> databaseFirestorePaths;
 
-    public MethodCallExpressionVisitor(Set<String> urlReferences, Set<String> pathReferences, Set<String> dbReferences) {
+    public MethodCallExpressionVisitor(Set<String> urlReferences,
+                                       Set<String> pathReferences,
+                                       Set<String> dbReferences,
+                                       Set<String> databaseFirestorePaths) {
         this.urlReferences = urlReferences;
         this.pathReferences = pathReferences;
         this.dbReferences = dbReferences;
+        this.databaseFirestorePaths = databaseFirestorePaths;
     }
 
     @Override
@@ -29,10 +34,17 @@ public class MethodCallExpressionVisitor extends JavaRecursiveElementVisitor {
         super.visitCallExpression(callExpression);
 
         PsiMethod method = callExpression.resolveMethod();
+
+        if (method == null) {
+            return;
+        }
+
         String methodSig = method.getSignature(PsiSubstitutor.EMPTY).getName();
 
         // Firebase realtime related
         if (methodSig.equals("getReference") ||
+                methodSig.equals("collection") ||
+                methodSig.equals("document") ||
                 methodSig.equals("getReferenceFromUrl") ||
                 methodSig.equals("child")) {
 
@@ -55,9 +67,9 @@ public class MethodCallExpressionVisitor extends JavaRecursiveElementVisitor {
                     if (matcher.find()) {
                         String firebaseUrl = matcher.group(1);
 
-                        if (!firebaseUrl.endsWith("/")) {
-                            firebaseUrl = firebaseUrl + "/";
-                        }
+//                        if (!firebaseUrl.endsWith("/")) {
+//                            firebaseUrl = firebaseUrl + "";
+//                        }
                         urlReferences.add(firebaseUrl);
                     } else {
                         pathReferences.add(param + "/");
@@ -73,6 +85,7 @@ public class MethodCallExpressionVisitor extends JavaRecursiveElementVisitor {
                         PsiExpression[] expressions = callExpression.getArgumentList().getExpressions();
 
                         // path or db reference
+                        // e.g., /text/text/text/.json
                         if (expressions.length == 1) {
                             PsiExpression psiExpression = expressions[0];
 
@@ -104,6 +117,12 @@ public class MethodCallExpressionVisitor extends JavaRecursiveElementVisitor {
                     } catch (Exception nullSb) {
                         break;
                     }
+                }
+            } else if (parentClass.equals("com.google.firebase.firestore.FirebaseFirestore")) {
+                try {
+                    throw new Exception("Not implemented yet");
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             }
         }

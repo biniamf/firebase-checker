@@ -10,7 +10,12 @@ public class Utils {
 
     public static boolean isReadable(String dbRef, String endPoint) {
 //        String url = "https://" + projectID + ".firebaseio.com/" + endPoint + ".json";
-        String url = dbRef + "/" + endPoint + "/.json";
+        String uri =  "/" +  endPoint + "/.json";
+
+        String url = dbRef + uri.replace("//", "/");
+
+        System.out.println("isReadable: " + url);
+
         OkHttpClient client = new OkHttpClient();
 
         Request request = new Request.Builder()
@@ -44,7 +49,14 @@ public class Utils {
     }
 
     public static boolean isWritable(String dbRef, String endPoint) {
-        String url = dbRef + "/" +  endPoint + "/.json";
+
+        //https://firestore.googleapis.com/v1beta1/projects/gursha-dc8d2/databases/(default)/documents/config
+
+        String uri =  "/" +  endPoint + "/.json";
+        String url = dbRef + uri.replace("//", "/");
+
+        System.out.println("isWritable: " + url);
+
         String jsonContent = "{ \"owaspsectest\": { \"w\": true } }";
         OkHttpClient client = new OkHttpClient();
 

@@ -7,7 +7,6 @@ import com.intellij.notification.NotificationListener;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.LangDataKeys;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -17,23 +16,17 @@ import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.ui.DialogBuilder;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.packageDependencies.actions.DependenciesHandlerBase;
 import com.intellij.psi.*;
-import kotlin.reflect.jvm.internal.impl.load.kotlin.JvmType;
-import okhttp3.*;
 import org.jetbrains.annotations.NotNull;
 
+import org.jetbrains.kotlin.psi.*;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Scanner;
-import java.util.Set;
+import java.util.*;
 
 public class FirebaseDbBChecker extends AnAction {
 
@@ -44,22 +37,33 @@ public class FirebaseDbBChecker extends AnAction {
     private Set<String> databasePathReferences;
     private Set<String> databaseUrlReferences;
     private Set<String> databaseDbReferences;
-    private String report = "<html><ul>";
-    private boolean warn = false;
+    private Set<String> firestoreDatabasePaths;
+    private Set<String> firestoreUrlReferences;
+    private String report;
+    private boolean warn;
+    private int progress = 1;
+    private int total = 1;
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent anActionEvent) {
         currentProject = anActionEvent.getProject();
         rootDir = currentProject.getBasePath();
+        report = "";
+        warn = false;
+
+        System.out.println("menu item clicked ");
 
         databasePathReferences = new HashSet<>();
         databaseUrlReferences = new HashSet<>();
         databaseDbReferences = new HashSet<>();
+        firestoreDatabasePaths = new HashSet<>();
+        firestoreUrlReferences = new HashSet<>();
 
         checkFirebaseDb();
     }
 
     private void checkFirebaseDb() {
+
 
         getConfigDbReference();
         getSourceDbRefereces();
@@ -71,29 +75,48 @@ public class FirebaseDbBChecker extends AnAction {
         final Task task = new Task.Backgroundable(currentProject, "Checking your Firebase realtime database...", true, new PerformAnalysisInBackgroundOption(currentProject)) {
             @Override
             public void run(@NotNull final ProgressIndicator indicator) {
-                // add root path
-                databasePathReferences.add("");
 
                 Set<String> paths = new HashSet<>();
                 for (String pathRef : databasePathReferences) {
+                    paths.add("/" + pathRef);
                     for (String dbRef : databaseDbReferences) {
                         String p = pathRef + "/" + dbRef;
-                        paths.add(p.replace("//","/"));
+                        paths.add(p.replace("//", "/"));
                     }
                 }
 
-                int progress = 1;
-                int total = paths.size() * databaseUrlReferences.size();
+                total = databaseUrlReferences.size() + paths.size() * databaseUrlReferences.size();
 
-                for (String urlRef : databaseUrlReferences) {
-                    for (String path : paths) {
+                firestoreDatabasePaths.add("");
+                total += firestoreUrlReferences.size() * firestoreDatabasePaths.size();
 
-                        indicator.setText("Checking " + (progress ++) + "/" + total + " possible paths...");
+                // add root path
+                paths.add("");
+
+                // Realtime
+                report = checkDatabase(databaseUrlReferences, paths, "Firebase realtime", indicator);
+
+                // Firestore
+                report += checkDatabase(firestoreUrlReferences, firestoreDatabasePaths, "Firestore", indicator);
+
+            }
+
+            String checkDatabase(Set<String> urlCollection, Set<String> pathCollection, String dbType, ProgressIndicator indicator) {
+                String localReport = "";
+
+                for (String urlRef : urlCollection) {
+
+                    for (String path : pathCollection) {
+
+                        System.out.println("Checking " + path);
+
+                        indicator.setText("Checking " + (progress++) + "/" + total + " possible paths...");
 
                         boolean readable = false;
                         boolean writable = false;
 
-                        String fullRef = (urlRef + path).replace("//","/");
+
+                        String fullRef = urlRef + path;
 
                         if (Utils.isReadable(urlRef, path)) {
                             readable = true;
@@ -103,54 +126,48 @@ public class FirebaseDbBChecker extends AnAction {
                             writable = true;
                         }
 
+
                         if (readable) {
                             warn = true;
                             if (writable) {
-                                report += "<li>Your Firebase realtime database at <b>" + fullRef + "</b> is <span style=\"color:red\">world readable and writable</span>!<br/> Please consider fixing your Security Rules before releasing your app.<br/></li>";
+                                localReport += "<li>Your " + dbType + " database at <b><a href=\"" + fullRef + "\">" + fullRef + "</b> is <span style=\"color:red\">world readable and writable</span>!<br/> Please consider fixing your Security Rules before releasing your app.<br/></li>";
                             } else {
-                                report += "<li>Your Firebase realtime database at <b>" + fullRef + "</b> is <span style=\"color:red\">world readable</span>!<br/> If it's not intentional, please consider fixing your Security Rules before releasing your app.<br/></li>";
+                                localReport += "<li>Your  " + dbType + "  database at <b><a href=\"" + fullRef + "\">" + fullRef + "</b> is <span style=\"color:red\">world readable</span>!<br/> If it's not intentional, please consider fixing your Security Rules before releasing your app.<br/></li>";
                             }
                         } else {
                             if (writable) {
-                                report += "<li>Your Firebase realtime database at <b>" + fullRef + "</b> is <span style=\"color:red\">world writable but not readable</span>!<br/> Please consider fixing your Security Rules before releasing your app.<br/></li>";
+                                localReport += "<li>Your " + dbType + "  database at <b><a href=\"" + fullRef + "\">" + fullRef + "</b> is <span style=\"color:red\">world writable but not readable</span>!<br/> Please consider fixing your Security Rules before releasing your app.<br/></li>";
                                 warn = true;
                             } else {
-                                report += "<li>Your Firebase realtime database at <b>" + fullRef + "</b> is not accessible for anonymous users!<br/></li>";
+                                localReport += "<li>Your " + dbType + "  atabase at <b><a href=\"" + fullRef + "\">" + fullRef + "</b> is not accessible for anonymous users!<br/></li>";
                             }
                         }
-
                     }
                 }
-                report += "</ul></html>";
+
+                return localReport;
             }
 
             @Override
             public void onSuccess() {
                 if (warn) {
+                    report = "<html><body><ul>" + report + "</ul></body></html>";
                     showDialog(this.getClass().getResourceAsStream("/warn.png"), report, "Warning!");
                 } else {
-                    showDialog(this.getClass().getResourceAsStream("/ok.png"), report, "Root Database OK!");
+
+                    if (!report.equals("")) {
+                        report = "<html><body><ul>" + report + "</ul></body></html>";
+                        showDialog(this.getClass().getResourceAsStream("/ok.png"), report, "Root Database OK!");
+                    } else {
+                        report = "We didn't find Firebase Realtime database references!";
+                        showDialog(this.getClass().getResourceAsStream("/ok.png"), report, "No Firebase Readltime DB Found!");
+                    }
+
                 }
             }
         };
 
         ProgressManager.getInstance().run(task);
-
-
-//        if (readable) {
-//            if (writable) {
-//                showDialog(this.getClass().getResourceAsStream("/warn.png"), "Your Firebase realtime database is world writable! Please consider fixing your Security Rules before releasing your app.", "Warning!");
-//            } else {
-//                showDialog(this.getClass().getResourceAsStream("/warn.png"), "Your Firebase realtime database is world readable! If it's not intentional, please consider fixing your Security Rules before releasing your app.", "Warning!");
-//            }
-//        } else {
-//            // in case reading is disabled but not writing
-//            if (writable) {
-//                showDialog(this.getClass().getResourceAsStream("/warn.png"), "Your Firebase realtime database is world writable but not readable! Please consider fixing your Security Rules before releasing your app.", "Warning!");
-//            } else {
-//                showDialog(this.getClass().getResourceAsStream("/ok.png"), "Your root Firebase realtime database is not accessible!", "Root Database OK!");
-//            }
-//        }
     }
 
     private void showDialog(InputStream inputStream, String msg, String title) {
@@ -185,15 +202,20 @@ public class FirebaseDbBChecker extends AnAction {
             JSONObject jsonObject = new JSONObject(jsonContent);
             projectID = jsonObject.getJSONObject("project_info").getString("project_id");
 
-            path = "https://" + projectID + ".firebaseio.com/";
+            path = "https://" + projectID + ".firebaseio.com";
 
             databaseUrlReferences.add(path);
+
+            path = "https://firestore.googleapis.com/v1beta1/projects/" + projectID + "/databases/(default)/documents/";
+
+            firestoreUrlReferences.add(path);
+
         } catch (FileNotFoundException fnf) {
             // google-services.json not found?
-            fnf.printStackTrace();
-        }   catch (JSONException je) {
-            // response isn't json?
-            je.printStackTrace();
+            //  fnf.printStackTrace();
+        } catch (JSONException je) {
+            // mabye objects not found?
+            //  je.printStackTrace();
         }
     }
 
@@ -206,11 +228,35 @@ public class FirebaseDbBChecker extends AnAction {
                 if (!fileOrDir.isDirectory()) {
                     PsiFile psiFile = PsiManager.getInstance(currentProject).findFile(fileOrDir);
 
-                    if (psiFile instanceof PsiJavaFile) {
-                        PsiJavaFile psiFJavaile = (PsiJavaFile) PsiManager.getInstance(currentProject).findFile(fileOrDir);
-                        psiFJavaile.accept(new MethodCallExpressionVisitor(databaseUrlReferences, databasePathReferences, databaseDbReferences));
-                    }
+                    try {
+                        if (psiFile instanceof PsiJavaFile) {
+                            PsiJavaFile psiJavaFile = (PsiJavaFile) psiFile;
 
+                            // invalidate old values
+                            psiJavaFile.clearCaches();
+
+                            psiJavaFile.accept(new MethodCallExpressionVisitor(databaseUrlReferences, databasePathReferences, databaseDbReferences, firestoreDatabasePaths));
+                        } else if (psiFile instanceof KtFile) {
+
+                            KtFile ktFile = (KtFile) psiFile;
+
+                            List<KtImportDirective> ktImportDirectives = ktFile.getImportList().getImports();
+
+                            // a dirty workaround to handle kotlin cases
+                            // check if there an import from Firebase lib
+                            for (KtImportDirective directive : ktImportDirectives) {
+                                if (directive.getImportedFqName().asString().startsWith("com.google.firebase")) {
+                                    ktFile.accept(new KotlinTreeVsitor(databaseUrlReferences, databasePathReferences, databaseDbReferences, firestoreDatabasePaths));
+
+                                    // break. we have already collected some of the db references
+
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
 
                 return true;

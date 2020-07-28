@@ -12,6 +12,8 @@
     <!-- uncomment to enable plugin in all products
     <depends>com.intellij.modules.lang</depends>
     -->
+    <depends optional="true">org.jetbrains.kotlin</depends>
+
     <idea-version since-build="174.0"/>
 
     <extensions defaultExtensionNs="com.intellij">
@@ -19,7 +21,7 @@
     </extensions>
 
     <actions>
-        <action id="eu.fbk.st.FirebaseDbBChecker.check" class="eu.fbk.st.FirebaseDbBChecker" text="_Check Firebase Access" description="Start checking my Firebase database.">
+        <action id="eu.fbk.st.FirebaseDbBChecker.Check" class="eu.fbk.st.FirebaseDbBChecker" text="_Check Firebase Access" description="Start checking my Firebase database.">
             <add-to-group group-id="ToolsMenu" anchor="first"  />
         </action>
     </actions>
